@@ -1,0 +1,1011 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Personenverwaltung</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Special+Elite&family=Lora:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.12.2/firebase-app-compat.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.12.2/firebase-auth-compat.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.12.2/firebase-firestore-compat.min.js"></script>
+<style>
+  :root{
+    --bg: #16283D;
+    --bg-2: #1E3550;
+    --card: #F7F3E8;
+    --card-line: #D8CDB0;
+    --ink: #1F3A5A;
+    --charcoal: #2B2B2B;
+    --accent-red: #B23A3A;
+    --kraft: #C79A4B;
+    --kraft-dark: #A87B32;
+    --muted: #7A7563;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    min-height:100vh;
+    background:
+      radial-gradient(circle at 20% 10%, rgba(255,255,255,0.03), transparent 40%),
+      linear-gradient(180deg, var(--bg) 0%, var(--bg-2) 100%);
+    font-family:'Lora', serif;
+    color: var(--charcoal);
+    padding: 32px 16px 64px;
+  }
+  .wrap{
+    max-width: 880px;
+    margin: 0 auto;
+  }
+  .masthead{
+    display:flex;
+    align-items:baseline;
+    justify-content:space-between;
+    margin-bottom: 22px;
+    padding: 0 6px;
+  }
+  .masthead h1{
+    font-family:'Special Elite', monospace;
+    color:#F2EFE6;
+    font-size: 1.5rem;
+    letter-spacing: 0.04em;
+    margin:0;
+    text-transform: uppercase;
+  }
+  .masthead .sub{
+    font-family:'IBM Plex Mono', monospace;
+    font-size: 0.7rem;
+    color:#93A6BF;
+    letter-spacing: 0.06em;
+  }
+  .masthead-right{
+    display:flex;
+    flex-direction:column;
+    align-items:flex-end;
+    gap:4px;
+  }
+  .logout-link{
+    font-family:'IBM Plex Mono', monospace;
+    font-size: 0.68rem;
+    color:#93A6BF;
+    background:none;
+    border:1px solid #3E5878;
+    border-radius:4px;
+    padding:3px 8px;
+    cursor:pointer;
+  }
+  .logout-link:hover{ color:#F2EFE6; border-color:#93A6BF; }
+  .logout-link.hidden{ display:none; }
+
+  /* Login/Registrieren */
+  .auth-overlay{
+    position:fixed;
+    inset:0;
+    background:
+      radial-gradient(circle at 20% 10%, rgba(255,255,255,0.03), transparent 40%),
+      linear-gradient(180deg, var(--bg) 0%, var(--bg-2) 100%);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:20px;
+    z-index:100;
+  }
+  .auth-overlay.hidden{ display:none; }
+  .auth-box{
+    background: var(--card);
+    border-radius: 2px 10px 10px 10px;
+    width:100%;
+    max-width: 360px;
+    padding: 28px 26px 24px;
+    box-shadow: 0 18px 40px rgba(0,0,0,0.35);
+  }
+  .auth-box h2{
+    font-family:'Special Elite', monospace;
+    color: var(--ink);
+    font-size: 1.1rem;
+    margin: 0 0 4px;
+  }
+  .auth-box .auth-sub{
+    font-family:'IBM Plex Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--muted);
+    margin-bottom: 18px;
+  }
+  .auth-tabs{
+    display:flex;
+    gap:6px;
+    margin-bottom:16px;
+  }
+  .auth-tab{
+    flex:1;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:0.72rem;
+    text-align:center;
+    padding:7px 0;
+    border:1px solid var(--card-line);
+    border-radius:4px;
+    background:#FFFDF8;
+    cursor:pointer;
+    color:var(--muted);
+  }
+  .auth-tab.active{
+    background: var(--ink);
+    color:#F2EFE6;
+    border-color:var(--ink);
+  }
+  .auth-field{
+    display:block;
+    width:100%;
+    font-family:'Lora', serif;
+    font-size:0.92rem;
+    padding:9px 10px;
+    margin-bottom:10px;
+    border:1px solid var(--card-line);
+    border-radius:4px;
+    background:#FFFDF8;
+  }
+  .auth-field:focus{ outline:1px solid var(--kraft-dark); }
+  .auth-submit{
+    width:100%;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:0.78rem;
+    background: var(--ink);
+    color:#F2EFE6;
+    border:none;
+    border-radius:4px;
+    padding:10px 0;
+    cursor:pointer;
+    margin-top:4px;
+  }
+  .auth-submit:hover{ background:#274566; }
+  .auth-error{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:0.72rem;
+    color: var(--accent-red);
+    min-height:1.2em;
+    margin-top:10px;
+  }
+
+  /* Tabs = Karteireiter */
+  .tabs{
+    display:flex;
+    align-items:flex-end;
+    gap:6px;
+    padding: 0 10px;
+    overflow-x:auto;
+  }
+  .tab{
+    font-family:'Special Elite', monospace;
+    font-size: 0.82rem;
+    color: #4A3B1C;
+    background: linear-gradient(180deg, #DCC48A, var(--kraft));
+    border: 1px solid var(--kraft-dark);
+    border-bottom: none;
+    padding: 9px 18px 8px;
+    border-radius: 6px 6px 0 0;
+    cursor: pointer;
+    white-space: nowrap;
+    position: relative;
+    top: 1px;
+    opacity: 0.72;
+    transition: opacity 0.15s, transform 0.15s;
+  }
+  .tab:hover{ opacity:0.92; }
+  .tab.active{
+    opacity: 1;
+    background: linear-gradient(180deg, #F0DDA6, #E4C67F);
+    transform: translateY(-2px);
+    box-shadow: 0 -2px 6px rgba(0,0,0,0.15);
+  }
+  .tab.new{
+    background: transparent;
+    border: 1px dashed #6E86A3;
+    color: #C7D3E2;
+    opacity: 0.8;
+  }
+  .tab.new:hover{ opacity: 1; border-color:#93A6BF; }
+
+  /* Card = Karteikarte / Heftseite */
+  .card{
+    background: var(--card);
+    border: 1px solid var(--card-line);
+    border-radius: 2px 10px 10px 10px;
+    box-shadow: 0 18px 40px rgba(0,0,0,0.35);
+    padding: 28px 30px 30px 64px;
+    position: relative;
+    min-height: 280px;
+  }
+  .margin-rule{
+    position:absolute;
+    left: 42px;
+    top: 0;
+    bottom: 0;
+    width: 1.5px;
+    background: var(--accent-red);
+    opacity: 0.55;
+  }
+  .punch{
+    position:absolute;
+    left: 16px;
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    background: var(--bg);
+    box-shadow: inset 0 2px 3px rgba(0,0,0,0.5);
+  }
+  .card-header{
+    display:flex;
+    justify-content:space-between;
+    align-items: flex-start;
+    margin-bottom: 18px;
+    border-bottom: 1px solid var(--card-line);
+    padding-bottom: 12px;
+  }
+  .class-name{
+    font-size: 1.35rem;
+    font-weight: 600;
+    color: var(--ink);
+  }
+  .class-name[contenteditable]:focus{ outline: 1px dashed var(--kraft-dark); }
+  .meta{
+    font-family:'IBM Plex Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+  .delete-class{
+    font-family:'IBM Plex Mono', monospace;
+    font-size: 0.68rem;
+    color: var(--accent-red);
+    background:none;
+    border: 1px solid var(--accent-red);
+    border-radius: 4px;
+    padding: 5px 9px;
+    cursor:pointer;
+    opacity: 0.75;
+  }
+  .delete-class:hover{ opacity:1; background: rgba(178,58,58,0.08); }
+
+  .header-actions{
+    display:flex;
+    gap:8px;
+    flex-shrink:0;
+  }
+  .import-btn{
+    font-family:'IBM Plex Mono', monospace;
+    font-size: 0.68rem;
+    color: var(--ink);
+    background:none;
+    border: 1px solid var(--ink);
+    border-radius: 4px;
+    padding: 5px 9px;
+    cursor:pointer;
+    opacity: 0.8;
+  }
+  .import-btn:hover{ opacity:1; background: rgba(31,58,90,0.08); }
+
+  .empty .row{
+    display:flex;
+    gap:10px;
+    justify-content:center;
+    flex-wrap:wrap;
+  }
+  .empty .import-btn{
+    margin-top:14px;
+    padding: 9px 16px;
+    font-size: 0.75rem;
+  }
+
+  /* Import-Vorschau Modal */
+  .modal-overlay{
+    position:fixed;
+    inset:0;
+    background: rgba(10,18,28,0.65);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding: 20px;
+    z-index: 50;
+  }
+  .modal-overlay.hidden{ display:none; }
+  .modal{
+    background: var(--card);
+    border-radius: 10px;
+    max-width: 560px;
+    width:100%;
+    max-height: 82vh;
+    overflow-y:auto;
+    padding: 24px 26px;
+    box-shadow: 0 30px 60px rgba(0,0,0,0.5);
+  }
+  .modal h2{
+    font-family:'Special Elite', monospace;
+    font-size: 1.05rem;
+    color: var(--ink);
+    margin: 0 0 4px;
+  }
+  .modal .modal-sub{
+    font-family:'IBM Plex Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--muted);
+    margin-bottom: 18px;
+  }
+  .import-group{
+    border: 1px solid var(--card-line);
+    border-radius: 6px;
+    padding: 12px 14px;
+    margin-bottom: 12px;
+    background: #FFFDF8;
+  }
+  .import-group-head{
+    display:flex;
+    align-items:center;
+    gap: 10px;
+  }
+  .import-group-head input[type="text"]{
+    flex:1;
+    font-family:'Lora', serif;
+    font-weight:600;
+    font-size: 0.95rem;
+    border: none;
+    border-bottom: 1px dashed var(--card-line);
+    background:transparent;
+    padding: 3px 2px;
+  }
+  .import-group-head input[type="text"]:focus{ outline:none; border-bottom-color: var(--kraft-dark); }
+  .import-group-count{
+    font-family:'IBM Plex Mono', monospace;
+    font-size: 0.68rem;
+    color: var(--muted);
+    white-space:nowrap;
+  }
+  .import-group-names{
+    font-family:'IBM Plex Mono', monospace;
+    font-size: 0.72rem;
+    color: #4A4433;
+    margin-top: 8px;
+    line-height: 1.6;
+  }
+  .modal-actions{
+    display:flex;
+    justify-content:flex-end;
+    gap: 10px;
+    margin-top: 20px;
+  }
+  .modal-actions button{
+    font-family:'IBM Plex Mono', monospace;
+    font-size: 0.75rem;
+    border-radius: 4px;
+    padding: 9px 16px;
+    cursor:pointer;
+  }
+  .modal-cancel{ background:none; border:1px solid var(--muted); color: var(--charcoal); }
+  .modal-confirm{ background: var(--ink); border:1px solid var(--ink); color:#F2EFE6; }
+  .modal-empty{ color: var(--accent-red); font-family:'IBM Plex Mono', monospace; font-size:0.8rem; }
+
+  .roster{
+    list-style:none;
+    margin:0;
+    padding:0;
+  }
+  .roster li{
+    display:flex;
+    align-items:center;
+    gap: 10px;
+    padding: 9px 0;
+    border-bottom: 1px solid #E4DCC4;
+  }
+  .roster li .idx{
+    font-family:'IBM Plex Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--muted);
+    width: 22px;
+  }
+  .roster li .name{
+    flex:1;
+    font-size: 0.98rem;
+  }
+  .roster li .name[contenteditable]:focus{ outline: 1px dashed var(--kraft-dark); background:#FBF8EF; }
+  .remove-student{
+    background:none;
+    border:none;
+    color: var(--muted);
+    font-size: 1rem;
+    cursor:pointer;
+    line-height: 1;
+    padding: 2px 6px;
+  }
+  .remove-student:hover{ color: var(--accent-red); }
+
+  .add-row{
+    display:flex;
+    gap:8px;
+    margin-top: 16px;
+  }
+  .add-row input{
+    flex:1;
+    font-family:'Lora', serif;
+    font-size: 0.95rem;
+    padding: 8px 10px;
+    border: 1px solid var(--card-line);
+    border-radius: 4px;
+    background: #FFFDF8;
+  }
+  .add-row input:focus{ outline: 1px solid var(--kraft-dark); }
+  .add-row button{
+    font-family:'IBM Plex Mono', monospace;
+    font-size: 0.75rem;
+    background: var(--ink);
+    color: #F2EFE6;
+    border:none;
+    border-radius: 4px;
+    padding: 0 16px;
+    cursor:pointer;
+  }
+  .add-row button:hover{ background:#274566; }
+
+  .empty{
+    text-align:center;
+    padding: 50px 10px;
+    color: var(--muted);
+  }
+  .empty .big{
+    font-family:'Special Elite', monospace;
+    font-size:1rem;
+    color: var(--ink);
+    margin-bottom: 8px;
+  }
+  .empty button{
+    margin-top: 14px;
+    font-family:'IBM Plex Mono', monospace;
+    font-size: 0.78rem;
+    background: var(--kraft);
+    color:#4A3B1C;
+    border:1px solid var(--kraft-dark);
+    border-radius: 4px;
+    padding: 9px 16px;
+    cursor:pointer;
+  }
+  .status{
+    text-align:center;
+    font-family:'IBM Plex Mono', monospace;
+    font-size: 0.7rem;
+    color: #93A6BF;
+    margin-top: 14px;
+    min-height: 1em;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="masthead">
+    <h1>Personenverwaltung</h1>
+    <div class="masthead-right">
+      <div class="sub">zentrale Datenquelle · Klassen &amp; Schüler:innen</div>
+      <button class="logout-link hidden" id="logoutBtn">Abmelden</button>
+    </div>
+  </div>
+
+  <div class="tabs" id="tabs"></div>
+
+  <div class="card" id="card">
+    <div class="margin-rule"></div>
+    <div class="punch" style="top:24px"></div>
+    <div class="punch" style="top:50%; transform:translateY(-50%)"></div>
+    <div class="punch" style="bottom:24px"></div>
+    <div id="cardInner"></div>
+  </div>
+
+  <div class="status" id="status"></div>
+</div>
+
+<input type="file" id="fileInput" accept=".xlsx,.xls,.csv" style="display:none">
+
+<div class="auth-overlay hidden" id="authOverlay">
+  <div class="auth-box">
+    <h2>Personenverwaltung</h2>
+    <div class="auth-sub">Anmelden, um auf deine Klassen zuzugreifen</div>
+    <div class="auth-tabs">
+      <div class="auth-tab active" id="tabSignin">Anmelden</div>
+      <div class="auth-tab" id="tabSignup">Registrieren</div>
+    </div>
+    <input type="email" class="auth-field" id="authEmail" placeholder="E-Mail" autocomplete="username">
+    <input type="password" class="auth-field" id="authPassword" placeholder="Passwort" autocomplete="current-password">
+    <button class="auth-submit" id="authSubmit">Anmelden</button>
+    <div class="auth-error" id="authError"></div>
+  </div>
+</div>
+
+<div class="modal-overlay hidden" id="modalOverlay">
+  <div class="modal">
+    <h2>Import-Vorschau</h2>
+    <div class="modal-sub" id="modalSub"></div>
+    <div id="modalBody"></div>
+    <div class="modal-actions">
+      <button class="modal-cancel" id="modalCancel">Abbrechen</button>
+      <button class="modal-confirm" id="modalConfirm">Übernehmen</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   FIREBASE-KONFIGURATION
+   Ersetze die Werte unten durch die firebaseConfig aus deiner
+   Firebase-Konsole (Projekteinstellungen → Web-App).
+   Dieselbe Config in jedes weitere Tool einfügen, damit sie
+   sich dieselbe Datenbank teilen.
+   ============================================================ */
+const firebaseConfig = {
+  apiKey: "AIzaSyCGKzTHxPYoADVqqE3vvNOpksRgCK6stes",
+  authDomain: "wochenbuch-projekt.firebaseapp.com",
+  projectId: "wochenbuch-projekt",
+  storageBucket: "wochenbuch-projekt.firebasestorage.app",
+  messagingSenderId: "816559454884",
+  appId: "1:816559454884:web:1b7d7ab1b62a508df54431"
+};
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+
+let currentUser = null;
+
+function klassenRef(){
+  return db.collection('users').doc(currentUser.uid).collection('klassen');
+}
+
+/* ---------- Login / Registrieren ---------- */
+
+let authMode = 'signin';
+
+document.getElementById('tabSignin').onclick = () => setAuthMode('signin');
+document.getElementById('tabSignup').onclick = () => setAuthMode('signup');
+
+function setAuthMode(mode){
+  authMode = mode;
+  document.getElementById('tabSignin').classList.toggle('active', mode==='signin');
+  document.getElementById('tabSignup').classList.toggle('active', mode==='signup');
+  document.getElementById('authSubmit').textContent = mode==='signin' ? 'Anmelden' : 'Konto erstellen';
+  document.getElementById('authError').textContent = '';
+}
+
+function authErrorText(err){
+  const map = {
+    'auth/invalid-email': 'Ungültige E-Mail-Adresse.',
+    'auth/user-not-found': 'Kein Konto mit dieser E-Mail gefunden.',
+    'auth/wrong-password': 'Falsches Passwort.',
+    'auth/invalid-credential': 'E-Mail oder Passwort falsch.',
+    'auth/email-already-in-use': 'Für diese E-Mail existiert bereits ein Konto.',
+    'auth/weak-password': 'Passwort muss mindestens 6 Zeichen haben.'
+  };
+  return map[err.code] || 'Etwas ist schiefgelaufen. Bitte erneut versuchen.';
+}
+
+document.getElementById('authSubmit').onclick = async () => {
+  const email = document.getElementById('authEmail').value.trim();
+  const password = document.getElementById('authPassword').value;
+  const errEl = document.getElementById('authError');
+  errEl.textContent = '';
+  if(!email || !password){ errEl.textContent = 'Bitte E-Mail und Passwort eingeben.'; return; }
+  try{
+    if(authMode === 'signin'){
+      await auth.signInWithEmailAndPassword(email, password);
+    }else{
+      await auth.createUserWithEmailAndPassword(email, password);
+    }
+  }catch(err){
+    errEl.textContent = authErrorText(err);
+  }
+};
+
+document.getElementById('logoutBtn').onclick = () => auth.signOut();
+
+auth.onAuthStateChanged(async (user) => {
+  currentUser = user;
+  const overlay = document.getElementById('authOverlay');
+  const logoutBtn = document.getElementById('logoutBtn');
+  if(user){
+    overlay.classList.add('hidden');
+    logoutBtn.classList.remove('hidden');
+    await init();
+  }else{
+    overlay.classList.remove('hidden');
+    logoutBtn.classList.add('hidden');
+    klassen = [];
+    activeId = null;
+    activeKlasse = null;
+    renderTabs();
+    renderCard();
+  }
+});
+
+const INDEX_KEY = 'klassen-index';
+let klassen = [];      // [{id, name}]
+let activeId = null;
+let activeKlasse = null; // {id, name, schueler:[{id, vorname, nachname}]}
+
+function uid(prefix){ return prefix + '_' + Math.random().toString(36).slice(2,9); }
+
+function setStatus(msg, isError){
+  const el = document.getElementById('status');
+  el.textContent = msg || '';
+  el.style.color = isError ? '#D98080' : '#93A6BF';
+  if(msg && !isError){ setTimeout(()=>{ if(el.textContent===msg) el.textContent=''; }, 1800); }
+}
+
+async function loadIndex(){
+  try{
+    const snap = await klassenRef().orderBy('name').get();
+    klassen = snap.docs.map(d => ({ id: d.id, name: d.data().name || 'Ohne Namen' }));
+  }catch(e){
+    klassen = [];
+    setStatus('Konnte Klassenliste nicht laden.', true);
+  }
+}
+
+async function loadKlasse(id){
+  try{
+    const doc = await klassenRef().doc(id).get();
+    return doc.exists ? { id, name: doc.data().name, schueler: doc.data().schueler || [] } : null;
+  }catch(e){
+    return null;
+  }
+}
+
+async function saveKlasse(k){
+  try{
+    await klassenRef().doc(k.id).set({ name: k.name, schueler: k.schueler });
+  }catch(e){
+    setStatus('Konnte Klasse nicht speichern.', true);
+  }
+}
+
+async function deleteKlasseStorage(id){
+  try{ await klassenRef().doc(id).delete(); }catch(e){}
+}
+
+function renderTabs(){
+  const tabs = document.getElementById('tabs');
+  tabs.innerHTML = '';
+  klassen.forEach(k=>{
+    const t = document.createElement('div');
+    t.className = 'tab' + (k.id===activeId ? ' active' : '');
+    t.textContent = k.name || 'Ohne Namen';
+    t.onclick = () => selectKlasse(k.id);
+    tabs.appendChild(t);
+  });
+  const newTab = document.createElement('div');
+  newTab.className = 'tab new';
+  newTab.textContent = '+ Neue Klasse';
+  newTab.onclick = createKlasse;
+  tabs.appendChild(newTab);
+}
+
+function renderCard(){
+  const inner = document.getElementById('cardInner');
+  if(!activeKlasse){
+    inner.innerHTML = `
+      <div class="empty">
+        <div class="big">Noch keine Klasse angelegt</div>
+        <div>Lege eine Klasse an, um Namen zu verwalten, auf die andere Tools zugreifen können.</div>
+        <div class="row">
+          <button id="emptyNewBtn">+ Erste Klasse anlegen</button>
+          <button class="import-btn" id="emptyImportBtn">⇪ Excel-Liste importieren</button>
+        </div>
+      </div>`;
+    document.getElementById('emptyNewBtn').onclick = createKlasse;
+    document.getElementById('emptyImportBtn').onclick = openFilePicker;
+    return;
+  }
+  const k = activeKlasse;
+  inner.innerHTML = `
+    <div class="card-header">
+      <div>
+        <div class="class-name" id="className" contenteditable="true" spellcheck="false">${escapeHtml(k.name)}</div>
+        <div class="meta">${k.schueler.length} Person${k.schueler.length===1?'':'en'} · ID: klasse:${k.id}</div>
+      </div>
+      <div class="header-actions">
+        <button class="import-btn" id="importBtn">⇪ Excel importieren</button>
+        <button class="delete-class" id="delClassBtn">Klasse löschen</button>
+      </div>
+    </div>
+    <ul class="roster" id="roster"></ul>
+    <div class="add-row">
+      <input type="text" id="newName" placeholder="Vor- und Nachname">
+      <button id="addBtn">Hinzufügen</button>
+    </div>
+  `;
+
+  const roster = document.getElementById('roster');
+  k.schueler.forEach((s, i)=>{
+    const li = document.createElement('li');
+    li.innerHTML = `
+      <span class="idx">${String(i+1).padStart(2,'0')}</span>
+      <span class="name" contenteditable="true" spellcheck="false" data-id="${s.id}">${escapeHtml(s.name)}</span>
+      <button class="remove-student" data-id="${s.id}" title="entfernen">✕</button>
+    `;
+    roster.appendChild(li);
+  });
+
+  document.getElementById('className').addEventListener('blur', onRenameClass);
+  document.getElementById('delClassBtn').onclick = onDeleteClass;
+  document.getElementById('importBtn').onclick = openFilePicker;
+  document.getElementById('addBtn').onclick = onAddStudent;
+  document.getElementById('newName').addEventListener('keydown', e=>{
+    if(e.key==='Enter') onAddStudent();
+  });
+  roster.querySelectorAll('.name').forEach(el=>{
+    el.addEventListener('blur', onRenameStudent);
+  });
+  roster.querySelectorAll('.remove-student').forEach(btn=>{
+    btn.addEventListener('click', onRemoveStudent);
+  });
+}
+
+function escapeHtml(str){
+  const d = document.createElement('div');
+  d.textContent = str || '';
+  return d.innerHTML;
+}
+
+async function selectKlasse(id){
+  activeId = id;
+  setStatus('Lade …');
+  activeKlasse = await loadKlasse(id);
+  if(!activeKlasse){
+    activeKlasse = { id, name: (klassen.find(k=>k.id===id)||{}).name || 'Klasse', schueler: [] };
+  }
+  setStatus('');
+  renderTabs();
+  renderCard();
+}
+
+async function createKlasse(){
+  const id = uid('k');
+  const neu = { id, name: 'Neue Klasse', schueler: [] };
+  klassen.push({ id, name: neu.name });
+  await saveKlasse(neu);
+  activeId = id;
+  activeKlasse = neu;
+  renderTabs();
+  renderCard();
+  const nameEl = document.getElementById('className');
+  if(nameEl){
+    const range = document.createRange();
+    range.selectNodeContents(nameEl);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+    nameEl.focus();
+  }
+}
+
+async function onRenameClass(e){
+  const val = e.target.textContent.trim() || 'Ohne Namen';
+  activeKlasse.name = val;
+  const entry = klassen.find(k=>k.id===activeId);
+  if(entry) entry.name = val;
+  setStatus('Speichere …');
+  await saveKlasse(activeKlasse);
+  setStatus('Gespeichert.');
+  renderTabs();
+}
+
+async function onDeleteClass(){
+  if(!confirm(`"${activeKlasse.name}" wirklich löschen? Alle Personen darin gehen verloren.`)) return;
+  klassen = klassen.filter(k=>k.id!==activeId);
+  await deleteKlasseStorage(activeId);
+  activeId = klassen.length ? klassen[0].id : null;
+  activeKlasse = null;
+  if(activeId){ await selectKlasse(activeId); }
+  else{ renderTabs(); renderCard(); }
+}
+
+async function onAddStudent(){
+  const input = document.getElementById('newName');
+  const name = input.value.trim();
+  if(!name) return;
+  activeKlasse.schueler.push({ id: uid('s'), name });
+  input.value = '';
+  setStatus('Speichere …');
+  await saveKlasse(activeKlasse);
+  setStatus('Gespeichert.');
+  renderCard();
+  document.getElementById('newName').focus();
+}
+
+async function onRenameStudent(e){
+  const id = e.target.getAttribute('data-id');
+  const val = e.target.textContent.trim();
+  const s = activeKlasse.schueler.find(s=>s.id===id);
+  if(!s) return;
+  if(!val){ e.target.textContent = s.name; return; }
+  s.name = val;
+  setStatus('Speichere …');
+  await saveKlasse(activeKlasse);
+  setStatus('Gespeichert.');
+}
+
+async function onRemoveStudent(e){
+  const id = e.currentTarget.getAttribute('data-id');
+  activeKlasse.schueler = activeKlasse.schueler.filter(s=>s.id!==id);
+  setStatus('Speichere …');
+  await saveKlasse(activeKlasse);
+  const entry = klassen.find(k=>k.id===activeId);
+  setStatus('Gespeichert.');
+  renderCard();
+}
+
+/* ---------- Excel-Import ---------- */
+
+let importGroups = []; // [{ key, nameInput, names:[string], include:bool }]
+
+function openFilePicker(){
+  document.getElementById('fileInput').value = '';
+  document.getElementById('fileInput').click();
+}
+
+document.getElementById('fileInput').addEventListener('change', async (e)=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  setStatus('Lese Datei …');
+  try{
+    const buf = await file.arrayBuffer();
+    const wb = XLSX.read(buf, { type: 'array' });
+    const sheet = wb.Sheets[wb.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+    const groups = buildImportGroups(rows, file.name);
+    setStatus('');
+    if(!groups.length){
+      setStatus('Keine Namen in der Datei gefunden.', true);
+      return;
+    }
+    openImportModal(groups);
+  }catch(err){
+    setStatus('Datei konnte nicht gelesen werden.', true);
+  }
+});
+
+function norm(s){ return String(s||'').trim().toLowerCase(); }
+
+function buildImportGroups(rows, fileName){
+  // leere Zeilen entfernen
+  rows = rows.filter(r => r.some(c => String(c).trim() !== ''));
+  if(!rows.length) return [];
+
+  const header = rows[0].map(norm);
+  const findCol = (...candidates) => header.findIndex(h => candidates.some(c => h === c || h.includes(c)));
+
+  const vornameIdx = findCol('vorname', 'first name');
+  const nachnameIdx = findCol('nachname', 'last name', 'surname', 'familienname');
+  const nameIdx = findCol('name', 'vollständiger name', 'full name', 'schüler', 'schueler');
+  const klasseIdx = findCol('klasse', 'class', 'gruppe');
+
+  const hasHeader = vornameIdx>=0 || nachnameIdx>=0 || nameIdx>=0 || klasseIdx>=0;
+  const dataRows = hasHeader ? rows.slice(1) : rows;
+
+  const groupsMap = new Map(); // key(lowercase) -> {display, names:Set}
+  const fallbackClassName = (activeKlasse ? activeKlasse.name : fileName.replace(/\.[^.]+$/, '')) || 'Importierte Liste';
+
+  dataRows.forEach(row=>{
+    let fullname = '';
+    if(vornameIdx>=0 && nachnameIdx>=0){
+      fullname = `${row[vornameIdx]||''} ${row[nachnameIdx]||''}`.trim();
+    }else if(nameIdx>=0){
+      fullname = String(row[nameIdx]||'').trim();
+    }else{
+      fullname = String(row[0]||'').trim();
+    }
+    if(!fullname) return;
+
+    const klasseVal = klasseIdx>=0 ? String(row[klasseIdx]||'').trim() : '';
+    const groupDisplay = klasseVal || fallbackClassName;
+    const key = norm(groupDisplay);
+    if(!groupsMap.has(key)) groupsMap.set(key, { display: groupDisplay, names: [] });
+    groupsMap.get(key).names.push(fullname);
+  });
+
+  return Array.from(groupsMap.values()).map(g => ({
+    key: uid('grp'),
+    name: g.display,
+    names: g.names,
+    include: true
+  }));
+}
+
+function openImportModal(groups){
+  importGroups = groups;
+  const totalNames = groups.reduce((sum,g)=>sum+g.names.length, 0);
+  document.getElementById('modalSub').textContent =
+    `${totalNames} Person${totalNames===1?'':'en'} in ${groups.length} Klasse${groups.length===1?'':'n'} erkannt · vor dem Übernehmen prüfen`;
+
+  const body = document.getElementById('modalBody');
+  body.innerHTML = groups.map(g => `
+    <div class="import-group" data-key="${g.key}">
+      <div class="import-group-head">
+        <input type="checkbox" checked data-role="include" data-key="${g.key}">
+        <input type="text" value="${escapeHtml(g.name)}" data-role="name" data-key="${g.key}">
+        <span class="import-group-count">${g.names.length} Person${g.names.length===1?'':'en'}</span>
+      </div>
+      <div class="import-group-names">${g.names.map(escapeHtml).join(' · ')}</div>
+    </div>
+  `).join('');
+
+  document.getElementById('modalOverlay').classList.remove('hidden');
+}
+
+function closeImportModal(){
+  document.getElementById('modalOverlay').classList.add('hidden');
+  importGroups = [];
+}
+
+document.getElementById('modalCancel').onclick = closeImportModal;
+document.getElementById('modalOverlay').addEventListener('click', (e)=>{
+  if(e.target.id === 'modalOverlay') closeImportModal();
+});
+
+document.getElementById('modalConfirm').onclick = async () => {
+  const body = document.getElementById('modalBody');
+  const includeInputs = body.querySelectorAll('[data-role="include"]');
+  const nameInputs = body.querySelectorAll('[data-role="name"]');
+  const nameByKey = {};
+  nameInputs.forEach(inp => nameByKey[inp.getAttribute('data-key')] = inp.value.trim());
+  const includeByKey = {};
+  includeInputs.forEach(inp => includeByKey[inp.getAttribute('data-key')] = inp.checked);
+
+  const toImport = importGroups
+    .filter(g => includeByKey[g.key])
+    .map(g => ({ ...g, name: nameByKey[g.key] || g.name }));
+
+  if(!toImport.length){ closeImportModal(); return; }
+
+  setStatus('Importiere …');
+  for(const g of toImport){
+    const existing = klassen.find(k => norm(k.name) === norm(g.name));
+    let target;
+    if(existing){
+      target = await loadKlasse(existing.id) || { id: existing.id, name: existing.name, schueler: [] };
+    }else{
+      target = { id: uid('k'), name: g.name, schueler: [] };
+      klassen.push({ id: target.id, name: target.name });
+    }
+    const existingNames = new Set(target.schueler.map(s => norm(s.name)));
+    g.names.forEach(n => {
+      if(!existingNames.has(norm(n))){
+        target.schueler.push({ id: uid('s'), name: n });
+        existingNames.add(norm(n));
+      }
+    });
+    await saveKlasse(target);
+    const idxEntry = klassen.find(k => k.id === target.id);
+    if(idxEntry) idxEntry.name = target.name;
+  }
+  closeImportModal();
+
+  await loadIndex();
+  if(activeId && klassen.some(k=>k.id===activeId)){
+    await selectKlasse(activeId);
+  }else if(klassen.length){
+    await selectKlasse(klassen[0].id);
+  }else{
+    renderTabs(); renderCard();
+  }
+  setStatus('Import abgeschlossen.');
+};
+
+async function init(){
+  setStatus('Lade …');
+  await loadIndex();
+  if(klassen.length){
+    await selectKlasse(klassen[0].id);
+  }else{
+    renderTabs();
+    renderCard();
+    setStatus('');
+  }
+}
+
+</script>
+</body>
+</html>
